@@ -4,18 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Consulta de Precios</title>
-  <!-- Librería Html5-QRCode -->
+  <!-- Cargamos la librería para activar la cámara -->
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding: 15px; background-color: #f4f4f9; margin: 0; }
-    h1 { color: #333; margin-top: 10px; font-size: 24px; }
-    .instrucciones { color: #666; font-size: 14px; margin-bottom: 15px; }
-    .btn-escanear { background-color: #007bff; color: white; border: none; padding: 14px 24px; font-size: 16px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; max-width: 320px; }
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background-color: #f4f4f9; }
+    h1 { color: #333; }
+    .instrucciones { color: #666; font-size: 14px; }
+    .btn-escanear { background-color: #007bff; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; margin-bottom: 15px; font-weight: bold; }
     .btn-escanear:active { background-color: #0056b3; }
-    .viewport { width: 100%; max-width: 360px; margin: 15px auto; border: 2px dashed #007bff; border-radius: 12px; background: #000; min-height: 220px; overflow: hidden; }
-    .resultado { background: white; padding: 20px; border-radius: 12px; max-width: 360px; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-    .label-codigo { font-size: 13px; color: #777; margin-bottom: 5px; }
-    .precio { font-size: 32px; font-weight: bold; color: #28a745; margin-top: 10px; }
+    .viewport { width: 100%; max-width: 400px; margin: 0 auto 20px auto; border: 2px dashed #ccc; border-radius: 8px; background: #fff; min-height: 250px; }
+    .resultado { background: white; padding: 15px; border-radius: 8px; max-width: 400px; margin: 0 auto; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .label-codigo { font-size: 12px; color: #888; }
+    .precio { font-size: 28px; font-weight: bold; color: #28a745; margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -25,11 +25,12 @@
   
   <button class="btn-escanear" id="btnIniciar" onclick="iniciarEscaner()">📷 Escanear Producto</button>
 
+  <!-- Contenedor del video -->
   <div id="interactive" class="viewport"></div>
 
   <div class="resultado" id="contenedorResultado">
-    <div class="label-codigo">Código detectado: <strong id="codigoLeido">-</strong></div>
-    <h2 id="nombreProducto" style="font-size: 20px; margin: 10px 0;">Esperando escaneo...</h2>
+    <div class="label-codigo">Código detectado: <span id="codigoLeido">-</span></div>
+    <h2 id="nombreProducto">Esperando escaneo...</h2>
     <div class="precio" id="precioProducto">-</div>
   </div>
 
@@ -37,7 +38,7 @@
     let listaProductos = [];
     let html5QrCode = null;
 
-    // Cargar productos desde el JSON
+    // Cargar productos desde productos.json
     fetch('productos.json')
       .then(response => response.json())
       .then(data => {
@@ -46,11 +47,11 @@
       })
       .catch(err => {
         console.error('Error al cargar productos.json:', err);
-        document.getElementById('nombreProducto').textContent = 'Error al cargar base de datos';
+        document.getElementById('nombreProducto').textContent = 'Error al cargar archivo de precios';
       });
 
     function iniciarEscaner() {
-      document.getElementById('nombreProducto').textContent = 'Buscando código...';
+      document.getElementById('nombreProducto').textContent = 'Iniciando cámara...';
       document.getElementById('precioProducto').textContent = '-';
 
       if (html5QrCode && html5QrCode.isScanning) {
@@ -72,18 +73,17 @@
       });
 
       const configuracion = { 
-        fps: 20, 
-        qrbox: { width: 280, height: 120 },
+        fps: 15, // Velocidad equilibrada que no satura el procesador del móvil
+        qrbox: { width: 300, height: 150 },
         aspectRatio: 1.0
       };
 
-      // Inicio estándar sin restricciones complejas
       html5QrCode.start(
         { facingMode: "environment" }, 
         configuracion, 
         onScanSuccess
       ).catch(err => {
-        alert("No se pudo acceder a la cámara. Por favor, cierra la pestaña y vuelve a abrirla aceptando los permisos.");
+        alert("No se pudo abrir la cámara. Asegúrate de dar permisos en el navegador.");
       });
     }
 
