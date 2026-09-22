@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Consulta de Precios</title>
+  <!-- Cargamos la librería para activar la cámara -->
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background-color: #f4f4f9; }
+    h1 { color: #333; }
+    .instrucciones { color: #666; font-size: 14px; }
+    .btn-escanear { background-color: #007bff; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; margin-bottom: 15px; }
+    .btn-escanear:hover { background-color: #0056b3; }
+    .viewport { width: 100%; max-width: 400px; margin: 0 auto 20px auto; border: 2px dashed #ccc; border-radius: 8px; background: #fff; }
+    .resultado { background: white; padding: 15px; border-radius: 8px; max-width: 400px; margin: 0 auto; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .label-codigo { font-size: 12px; color: #888; }
+    .precio { font-size: 28px; font-weight: bold; color: #28a745; margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+  <h1>Consulta de Precios</h1>
+  <p class="instrucciones">Presiona el botón, enfoca el código de barras y espera un momento.</p>
+  
+  <button class="btn-escanear" id="btnIniciar" onclick="iniciarEscaner()">📷 Escanear Producto</button>
+
+  <!-- Aquí se mostrará el video de la cámara -->
+  <div id="interactive" class="viewport"></div>
+
+  <div class="resultado" id="contenedorResultado">
+    <div class="label-codigo">Código detectado: <span id="codigoLeido">-</span></div>
+    <h2 id="nombreProducto">Esperando escaneo...</h2>
+    <div class="precio" id="precioProducto">-</div>
+  </div>
+
+  <script>
+    let listaProductos = [];
+    let html5QrCode = null;
+
+    // Carga los productos desde tu archivo productos.json
+    fetch('productos.json')
+      .then(response => response.json())
+      .then(data => {
+        listaProductos = data;
+        console.log('Productos cargados:', listaProductos.length);
+      })
+      .catch(err => {
+        console.error('Error al cargar productos.json:', err);
+        document.getElementById('nombreProducto').textContent = 'Error al cargar archivo de precios';
+      });
+
+    function iniciarEscaner() {
+      document.getElementById('nombreProducto').textContent = 'Iniciando cámara...';
+      document.getElementById('precioProducto').textContent = '-';
+
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => activarCamara()).catch(err => console.error(err));
+      } else {
+        activarCamara();
+      }
+    }
+
+    function activarCamara() {
+      html5QrCode = new Html5Qrcode("interactive");
+
+      const configuracion = { 
+        fps: 10, 
+        qrbox: { width: 250, height: 150 } 
+      };
+
+      html5QrCode.start(
+        { facingMode: "environment" }, 
+        configuracion, 
+        onScanSuccess
+      ).catch(err => {
+        alert("No se pudo abrir la cámara. Asegúrate de dar permisos en el navegador.");
+      });
+    }
+
+    function onScanSuccess(decodedText) {
+      // Detiene la cámara al encontrar un código
+      html5QrCode.stop().then(() => {
+        buscarProducto(decodedText);
+      }).catch(err => console.error(err));
+    }
+
+    function buscarProducto(codigoEscaneado) {
+      const codigoLimpio = String(codigoEscaneado).trim();
+      document.getElementById('codigoLeido').textContent = codigoLimpio;
+
+      // Busca coincidencia en las distintas formas que puede tener la clave
+      const encontrado = listaProductos.find(item => {
+        const codigoEnJson = String(
+          item["Código de barras"] || 
+          item["codigo_barras"] || 
+          item["Codigo de barras"] || ''
+        ).trim();
+
+        return codigoEnJson === codigoLimpio;
+      });
+
+      if (encontrado) {
+        document.getElementById('nombreProducto').textContent = encontrado["Producto"] || encontrado["producto"];
+        document.getElementById('precioProducto').textContent = `$${encontrado["Precio"] || encontrado["precio"]}`;
+      } else {
+        document.getElementById('nombreProducto').textContent = 'Artículo no encontrado';
+        document.getElementById('precioProducto').textContent = '-';
+      }
+    }
+  </script>
+</body>
+</html>
