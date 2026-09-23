@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Escáner de Precios</title>
-  <!-- Librería ZXing -->
+  <!-- Librería ZXing para escaneo universal -->
   <script src="https://unpkg.com/@zxing/library@latest"></script>
   <style>
     body { font-family: sans-serif; text-align: center; padding: 15px; background: #f4f4f9; margin: 0; }
@@ -28,13 +28,13 @@
 
   <div class="container">
     <h2>Escáner de Precios</h2>
-    <p class="estado" id="estado">Iniciando cámara...</p>
+    <p class="estado" id="estado">Cargando base de datos de productos...</p>
     
     <video id="video" autoplay playsinline muted></video>
 
     <!-- Caja donde se muestra la información del producto y precio -->
     <div id="tarjeta" class="tarjeta-precio">
-      <div class="producto-nombre" id="nombre-prod">Cargando producto...</div>
+      <div class="producto-nombre" id="nombre-prod">---</div>
       <div class="producto-precio" id="precio-prod">$ --</div>
       <div class="codigo-texto" id="codigo-leido">Código: </div>
     </div>
@@ -54,14 +54,27 @@
 
     let codeReader;
     let buscando = false;
+    let productosDB = {};
 
+    // 1. Cargar la base de datos productos.json
+    async function cargarProductos() {
+      try {
+        const respuesta = await fetch('productos.json');
+        productosDB = await respuesta.json();
+        estado.textContent = "✅ Base de datos lista. Iniciando cámara...";
+        iniciarEscaner();
+      } catch (error) {
+        estado.textContent = "❌ Error al cargar productos.json: " + error.message;
+      }
+    }
+
+    // 2. Iniciar el lector de cámara
     async function iniciarEscaner() {
       codeReader = new ZXing.BrowserMultiFormatReader();
 
       try {
         const videoInputDevices = await codeReader.listVideoInputDevices();
         
-        // Seleccionar cámara trasera
         let selectedDeviceId;
         const trasera = videoInputDevices.find(device => 
           device.label.toLowerCase().includes('back') || 
@@ -73,13 +86,11 @@
 
         estado.textContent = "📷 Apuntá al código de barras";
 
-        // Escaneo continuo
         codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
           if (result && !buscando) {
-            buscando = true; // Pausar lecturas duplicadas
+            buscando = true; // Pausa para evitar repeticiones
             
-            // Vibrar el celular si el dispositivo lo permite
-            if (navigator.vibrate) navigator.vibrate(100);
+            if (navigator.vibrate) navigator.vibrate(100); // Vibrar si se soporta
 
             const codigo = result.getText();
             mostrarResultado(codigo);
@@ -91,49 +102,41 @@
       }
     }
 
-    // Función que busca el precio del producto
-    async function obtenerPrecio(codigo) {
-      // ⚠️ AQUÍ DEBES REEMPLAZAR ESTA DIRECCIÓN POR TU PROPIA API O BASE DE DATOS
-      // Ejemplo: const respuesta = await fetch(`https://tu-api.com/productos/${codigo}`);
-      
-      /* --- SIMULACIÓN DE EJEMPLO DE BÚSQUEDA --- */
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          // Si quieres probar un código estático como ejemplo:
-          resolve({
-            nombre: "Producto detectado",
-            precio: "Consultar en caja / Sin registro"
-          });
-        }, 300);
-      });
-    }
-
-    async function mostrarResultado(codigo) {
-      estado.textContent = "🔎 Buscando precio...";
+    // 3. Buscar el código en el JSON y mostrar precio
+    function mostrarResultado(codigo) {
       tarjeta.style.display = "block";
-      nombreProd.textContent = "Buscando en la base de datos...";
-      precioProd.textContent = "...";
       codigoLeido.textContent = "Código: " + codigo;
 
-      // Obtener datos del producto
-      const producto = await obtenerPrecio(codigo);
+      // Buscar coincidencia exacta en el objeto
+      const producto = productosDB[codigo];
 
-      nombreProd.textContent = producto.nombre;
-      precioProd.textContent = producto.precio;
-      estado.textContent = "✅ Producto encontrado";
+      if (producto) {
+        nombreProd.textContent = producto.nombre;
+        precioProd.textContent = producto.precio;
+        tarjeta.style.background = "#eef9f1";
+        tarjeta.style.borderColor = "#b7ebc6";
+        estado.textContent = "✅ Producto encontrado";
+      } else {
+        nombreProd.textContent = "Producto no encontrado";
+        precioProd.textContent = "Sin Registro";
+        tarjeta.style.background = "#fff3cd";
+        tarjeta.style.borderColor = "#ffeeba";
+        estado.textContent = "⚠️ El código no está en la lista";
+      }
 
-      // Mostrar botón para volver a escanear
       btnEscanear.style.display = "block";
     }
 
+    // 4. Volver a escanear otro sin recargar la página
     function reiniciarEscaner() {
       tarjeta.style.display = "none";
       btnEscanear.style.display = "none";
       estado.textContent = "📷 Apuntá al código de barras";
-      buscando = false; // Habilitar nuevamente la detección
+      buscando = false;
     }
 
-    iniciarEscaner();
+    // Arrancar el proceso
+    cargarProductos();
   </script>
 </body>
 </html>
