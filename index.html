@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Consulta de Precios</title>
+    <!-- Cargamos la librería para uso de cámara y lectura de códigos -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -11,22 +13,31 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
+            padding: 15px;
+            box-sizing: border-box;
         }
         .container {
             background: white;
-            padding: 30px;
+            padding: 20px;
             border-radius: 12px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
             text-align: center;
-            width: 90%;
-            max-width: 400px;
+            width: 100%;
+            max-width: 450px;
+        }
+        #reader {
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 15px;
+            background-color: #000;
         }
         input[type="text"] {
             width: 100%;
             padding: 12px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             border: 2px solid #cccccc;
             border-radius: 6px;
             font-size: 16px;
@@ -60,7 +71,12 @@
 
 <div class="container">
     <h2>Buscador de Precios</h2>
-    <input type="text" id="codigoInput" placeholder="Escanee o ingrese el código..." autofocus autocomplete="off">
+    
+    <!-- Visor de la cámara -->
+    <div id="reader"></div>
+
+    <!-- Entrada manual o por lector USB/Bluetooth -->
+    <input type="text" id="codigoInput" placeholder="O ingrese código manualmente..." autocomplete="off">
 
     <div class="card" id="resultadoCard">
         <div class="nombre-producto" id="nombreProducto">Cargando base de datos...</div>
@@ -73,8 +89,9 @@
     const input = document.getElementById('codigoInput');
     const nombreEl = document.getElementById('nombreProducto');
     const precioEl = document.getElementById('precioProducto');
+    let html5QrcodeScanner;
 
-    // Carga directa del archivo JSON subido a GitHub
+    // Cargar productos directamente desde el archivo JSON
     fetch('productos.json')
         .then(response => {
             if (!response.ok) throw new Error('No se pudo cargar el archivo JSON');
@@ -83,6 +100,7 @@
         .then(data => {
             productos = data;
             nombreEl.textContent = "Listo para escanear";
+            iniciarCamara();
         })
         .catch(error => {
             console.error('Error:', error);
@@ -90,9 +108,32 @@
             nombreEl.classList.add('error');
         });
 
-    // Mantener foco automático en el cuadro de texto para la lectora
-    document.addEventListener('click', () => input.focus());
+    // Función para buscar e integrar con la lógica de productos
+    function buscarProducto(codigo) {
+        if (productos.length === 0) {
+            nombreEl.textContent = "Base de datos no cargada";
+            return;
+        }
 
+        const codigoLimpio = String(codigo).trim();
+
+        const productoEncontrado = productos.find(p => {
+            if (!p["Código de barras"]) return false;
+            return String(p["Código de barras"]).trim() === codigoLimpio;
+        });
+
+        if (productoEncontrado) {
+            nombreEl.textContent = productoEncontrado["Producto"];
+            precioEl.textContent = `$${productoEncontrado["Precio"]}`;
+            nombreEl.classList.remove('error');
+        } else {
+            nombreEl.textContent = `No encontrado (${codigoLimpio})`;
+            precioEl.textContent = "$ -";
+            nombreEl.classList.add('error');
+        }
+    }
+
+    // Escucha de ingreso manual o por lectora
     input.addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
             const codigo = input.value.trim();
@@ -103,27 +144,30 @@
         }
     });
 
-    function buscarProducto(codigo) {
-        if (productos.length === 0) {
-            nombreEl.textContent = "Base de datos no cargada";
-            return;
-        }
+    // Inicialización de la Cámara con la librería Html5Qrcode
+    function iniciarCamara() {
+        html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader",
+            { 
+                fps: 10, 
+                qrbox: { width: 250, height: 150 },
+                experimentalFeatures: {
+                    useBarCodeDetectorIfSupported: true
+                }
+            },
+            /* verbose= */ false
+        );
 
-        // Búsqueda exacta comparando con las claves del JSON ("Código de barras" y "Precio")
-        const productoEncontrado = productos.find(p => {
-            if (!p["Código de barras"]) return false;
-            return String(p["Código de barras"]).trim() === codigo;
-        });
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    }
 
-        if (productoEncontrado) {
-            nombreEl.textContent = productoEncontrado["Producto"];
-            precioEl.textContent = `$${productoEncontrado["Precio"]}`;
-            nombreEl.classList.remove('error');
-        } else {
-            nombreEl.textContent = "Producto no encontrado";
-            precioEl.textContent = "$ -";
-            nombreEl.classList.add('error');
-        }
+    function onScanSuccess(decodedText, decodedResult) {
+        // Al detectar un código por cámara, realizamos la búsqueda
+        buscarProducto(decodedText);
+    }
+
+    function onScanFailure(error) {
+        // Manejo silencioso de falsos positivos en el análisis continuo
     }
 </script>
 
