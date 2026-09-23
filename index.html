@@ -1,152 +1,131 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Escáner de Precios</title>
-  <!-- Librería ZXing para escaneo universal (iOS y Android) -->
-  <script src="https://unpkg.com/@zxing/library@latest"></script>
-  <style>
-    body { font-family: sans-serif; text-align: center; padding: 15px; background: #f4f4f9; margin: 0; }
-    .container { max-width: 400px; margin: 0 auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-    video { width: 100%; border-radius: 8px; background: #000; }
-    
-    /* Tarjeta de resultado */
-    .tarjeta-precio { margin-top: 15px; padding: 15px; border-radius: 8px; background: #eef9f1; border: 1px solid #b7ebc6; display: none; }
-    .producto-nombre { font-size: 1.1em; font-weight: bold; color: #2c3e50; margin-bottom: 5px; }
-    .producto-precio { font-size: 1.8em; font-weight: bold; color: #27ae60; margin: 5px 0; }
-    .codigo-texto { font-size: 0.85em; color: #7f8c8d; }
-    
-    /* Botón para volver a escanear */
-    .btn-nuevo { display: none; margin-top: 15px; width: 100%; padding: 12px; background: #3498db; color: white; border: none; border-radius: 8px; font-size: 1em; font-weight: bold; cursor: pointer; }
-    .btn-nuevo:active { background: #2980b9; }
-    
-    .estado { font-size: 0.9em; color: #666; margin-bottom: 10px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta de Precios</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 20px;
+            border: 2px solid #cccccc;
+            border-radius: 6px;
+            font-size: 16px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+        .card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            background-color: #fafafa;
+        }
+        .nombre-producto {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .precio-producto {
+            font-size: 28px;
+            color: #2e7d32;
+            font-weight: bold;
+        }
+        .error {
+            color: #d32f2f;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
 
-  <div class="container">
-    <h2>Escáner de Precios</h2>
-    <p class="estado" id="estado">Cargando base de datos de productos...</p>
-    
-    <video id="video" autoplay playsinline muted></video>
+<div class="container">
+    <h2>Buscador de Precios</h2>
+    <input type="text" id="codigoInput" placeholder="Escanee o ingrese el código..." autofocus autocomplete="off">
 
-    <!-- Caja donde se muestra la información del producto y precio -->
-    <div id="tarjeta" class="tarjeta-precio">
-      <div class="producto-nombre" id="nombre-prod">---</div>
-      <div class="producto-precio" id="precio-prod">$ --</div>
-      <div class="codigo-texto" id="codigo-leido">Código: </div>
+    <div class="card" id="resultadoCard">
+        <div class="nombre-producto" id="nombreProducto">Cargando base de datos...</div>
+        <div class="precio-producto" id="precioProducto">$ -</div>
     </div>
+</div>
 
-    <!-- Botón para volver a escanear otro producto -->
-    <button id="btn-escanear" class="btn-nuevo" onclick="reiniciarEscaner()">📷 Escanear otro producto</button>
-  </div>
+<script>
+    let productos = [];
+    const input = document.getElementById('codigoInput');
+    const nombreEl = document.getElementById('nombreProducto');
+    const precioEl = document.getElementById('precioProducto');
 
-  <script>
-    const video = document.getElementById('video');
-    const estado = document.getElementById('estado');
-    const tarjeta = document.getElementById('tarjeta');
-    const nombreProd = document.getElementById('nombre-prod');
-    const precioProd = document.getElementById('precio-prod');
-    const codigoLeido = document.getElementById('codigo-leido');
-    const btnEscanear = document.getElementById('btn-escanear');
-
-    let codeReader;
-    let buscando = false;
-    let productosDB = {};
-
-    // 1. Cargar la base de datos productos.json
-    async function cargarProductos() {
-      try {
-        const respuesta = await fetch('productos.json');
-        productosDB = await respuesta.json();
-        estado.textContent = "✅ Base de datos lista. Iniciando cámara...";
-        iniciarEscaner();
-      } catch (error) {
-        estado.textContent = "❌ Error al cargar productos.json: " + error.message;
-      }
-    }
-
-    // 2. Iniciar el lector de cámara
-    async function iniciarEscaner() {
-      codeReader = new ZXing.BrowserMultiFormatReader();
-
-      try {
-        const videoInputDevices = await codeReader.listVideoInputDevices();
-        
-        let selectedDeviceId;
-        const trasera = videoInputDevices.find(device => 
-          device.label.toLowerCase().includes('back') || 
-          device.label.toLowerCase().includes('trasera') || 
-          device.label.toLowerCase().includes('environment')
-        );
-
-        selectedDeviceId = trasera ? trasera.deviceId : videoInputDevices[0].deviceId;
-
-        estado.textContent = "📷 Apuntá al código de barras";
-
-        codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
-          if (result && !buscando) {
-            buscando = true; // Pausa para evitar lecturas duplicadas
-            
-            if (navigator.vibrate) navigator.vibrate(100); // Vibración de confirmación
-
-            const codigo = result.getText();
-            mostrarResultado(codigo);
-          }
+    // Carga directa del archivo JSON subido a GitHub
+    fetch('productos.json')
+        .then(response => {
+            if (!response.ok) throw new Error('No se pudo cargar el archivo JSON');
+            return response.json();
+        })
+        .then(data => {
+            productos = data;
+            nombreEl.textContent = "Listo para escanear";
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            nombreEl.textContent = "Error al cargar productos.json";
+            nombreEl.classList.add('error');
         });
 
-      } catch (error) {
-        estado.textContent = "❌ Error al acceder a la cámara: " + error.message;
-      }
+    // Mantener foco automático en el cuadro de texto para la lectora
+    document.addEventListener('click', () => input.focus());
+
+    input.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            const codigo = input.value.trim();
+            if (codigo) {
+                buscarProducto(codigo);
+            }
+            input.value = '';
+        }
+    });
+
+    function buscarProducto(codigo) {
+        if (productos.length === 0) {
+            nombreEl.textContent = "Base de datos no cargada";
+            return;
+        }
+
+        // Búsqueda exacta comparando con las claves del JSON ("Código de barras" y "Precio")
+        const productoEncontrado = productos.find(p => {
+            if (!p["Código de barras"]) return false;
+            return String(p["Código de barras"]).trim() === codigo;
+        });
+
+        if (productoEncontrado) {
+            nombreEl.textContent = productoEncontrado["Producto"];
+            precioEl.textContent = `$${productoEncontrado["Precio"]}`;
+            nombreEl.classList.remove('error');
+        } else {
+            nombreEl.textContent = "Producto no encontrado";
+            precioEl.textContent = "$ -";
+            nombreEl.classList.add('error');
+        }
     }
+</script>
 
-    // 3. Buscar el código en el JSON y mostrar precio
-    function mostrarResultado(codigo) {
-      tarjeta.style.display = "block";
-      codigoLeido.textContent = "Código detectado: " + codigo;
-
-      // Variación sin ceros a la izquierda por si el lector omite ceros iniciales
-      const codigoSinCeros = codigo.replace(/^0+/, '');
-
-      // Buscar coincidencia directa o con tolerancia a ceros y espacios
-      let producto = productosDB[codigo] || productosDB[codigoSinCeros];
-
-      if (!producto) {
-        const claveEncontrada = Object.keys(productosDB).find(key => 
-          key.trim() === codigo || key.trim() === codigoSinCeros
-        );
-        if (claveEncontrada) producto = productosDB[claveEncontrada];
-      }
-
-      if (producto) {
-        nombreProd.textContent = producto.nombre;
-        precioProd.textContent = producto.precio;
-        tarjeta.style.background = "#eef9f1";
-        tarjeta.style.borderColor = "#b7ebc6";
-        estado.textContent = "✅ Producto encontrado";
-      } else {
-        nombreProd.textContent = "Producto no encontrado";
-        precioProd.textContent = "Sin Registro";
-        tarjeta.style.background = "#fff3cd";
-        tarjeta.style.borderColor = "#ffeeba";
-        estado.textContent = "⚠️ El código (" + codigo + ") no figura en productos.json";
-      }
-
-      btnEscanear.style.display = "block";
-    }
-
-    // 4. Volver a escanear sin recargar la página
-    function reiniciarEscaner() {
-      tarjeta.style.display = "none";
-      btnEscanear.style.display = "none";
-      estado.textContent = "📷 Apuntá al código de barras";
-      buscando = false;
-    }
-
-    // Iniciar la aplicación
-    cargarProductos();
-  </script>
 </body>
 </html>
