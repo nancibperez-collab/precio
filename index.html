@@ -3,40 +3,65 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Escáner Universal (iPhone / Android)</title>
-  <!-- Cargamos la librería ZXing para compatibilidad universal -->
+  <title>Escáner de Precios</title>
+  <!-- Librería ZXing -->
   <script src="https://unpkg.com/@zxing/library@latest"></script>
   <style>
-    body { font-family: sans-serif; text-align: center; padding: 20px; background: #f4f4f9; }
+    body { font-family: sans-serif; text-align: center; padding: 15px; background: #f4f4f9; margin: 0; }
     .container { max-width: 400px; margin: 0 auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
     video { width: 100%; border-radius: 8px; background: #000; }
-    #resultado { margin-top: 15px; font-size: 1.2em; font-weight: bold; color: #2c3e50; word-break: break-all; }
+    
+    /* Tarjeta de resultado */
+    .tarjeta-precio { margin-top: 15px; padding: 15px; border-radius: 8px; background: #eef9f1; border: 1px solid #b7ebc6; display: none; }
+    .producto-nombre { font-size: 1.1em; font-weight: bold; color: #2c3e50; margin-bottom: 5px; }
+    .producto-precio { font-size: 1.8em; font-weight: bold; color: #27ae60; margin: 5px 0; }
+    .codigo-texto { font-size: 0.85em; color: #7f8c8d; }
+    
+    /* Botón para volver a escanear */
+    .btn-nuevo { display: none; margin-top: 15px; width: 100%; padding: 12px; background: #3498db; color: white; border: none; border-radius: 8px; font-size: 1em; font-weight: bold; cursor: pointer; }
+    .btn-nuevo:active { background: #2980b9; }
+    
     .estado { font-size: 0.9em; color: #666; margin-bottom: 10px; }
   </style>
 </head>
 <body>
 
   <div class="container">
-    <h2>Probador de Escáner (iOS / Android)</h2>
+    <h2>Escáner de Precios</h2>
     <p class="estado" id="estado">Iniciando cámara...</p>
+    
     <video id="video" autoplay playsinline muted></video>
-    <div id="resultado">Esperando código...</div>
+
+    <!-- Caja donde se muestra la información del producto y precio -->
+    <div id="tarjeta" class="tarjeta-precio">
+      <div class="producto-nombre" id="nombre-prod">Cargando producto...</div>
+      <div class="producto-precio" id="precio-prod">$ --</div>
+      <div class="codigo-texto" id="codigo-leido">Código: </div>
+    </div>
+
+    <!-- Botón para volver a escanear otro producto -->
+    <button id="btn-escanear" class="btn-nuevo" onclick="reiniciarEscaner()">📷 Escanear otro producto</button>
   </div>
 
   <script>
     const video = document.getElementById('video');
-    const resultado = document.getElementById('resultado');
     const estado = document.getElementById('estado');
+    const tarjeta = document.getElementById('tarjeta');
+    const nombreProd = document.getElementById('nombre-prod');
+    const precioProd = document.getElementById('precio-prod');
+    const codigoLeido = document.getElementById('codigo-leido');
+    const btnEscanear = document.getElementById('btn-escanear');
+
+    let codeReader;
+    let buscando = false;
 
     async function iniciarEscaner() {
-      // Usamos el lector ZXing compatible con iOS y Android
-      const codeReader = new ZXing.BrowserMultiFormatReader();
+      codeReader = new ZXing.BrowserMultiFormatReader();
 
       try {
-        // Pedir las cámaras disponibles en el iPhone
         const videoInputDevices = await codeReader.listVideoInputDevices();
         
-        // Seleccionar la cámara trasera (environment)
+        // Seleccionar cámara trasera
         let selectedDeviceId;
         const trasera = videoInputDevices.find(device => 
           device.label.toLowerCase().includes('back') || 
@@ -48,17 +73,64 @@
 
         estado.textContent = "📷 Apuntá al código de barras";
 
-        // Iniciar escaneo continuo
+        // Escaneo continuo
         codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
-          if (result) {
-            resultado.textContent = "🎉 ¡Código leído!: " + result.getText();
-            resultado.style.color = "green";
+          if (result && !buscando) {
+            buscando = true; // Pausar lecturas duplicadas
+            
+            // Vibrar el celular si el dispositivo lo permite
+            if (navigator.vibrate) navigator.vibrate(100);
+
+            const codigo = result.getText();
+            mostrarResultado(codigo);
           }
         });
 
       } catch (error) {
         estado.textContent = "❌ Error al acceder a la cámara: " + error.message;
       }
+    }
+
+    // Función que busca el precio del producto
+    async function obtenerPrecio(codigo) {
+      // ⚠️ AQUÍ DEBES REEMPLAZAR ESTA DIRECCIÓN POR TU PROPIA API O BASE DE DATOS
+      // Ejemplo: const respuesta = await fetch(`https://tu-api.com/productos/${codigo}`);
+      
+      /* --- SIMULACIÓN DE EJEMPLO DE BÚSQUEDA --- */
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          // Si quieres probar un código estático como ejemplo:
+          resolve({
+            nombre: "Producto detectado",
+            precio: "Consultar en caja / Sin registro"
+          });
+        }, 300);
+      });
+    }
+
+    async function mostrarResultado(codigo) {
+      estado.textContent = "🔎 Buscando precio...";
+      tarjeta.style.display = "block";
+      nombreProd.textContent = "Buscando en la base de datos...";
+      precioProd.textContent = "...";
+      codigoLeido.textContent = "Código: " + codigo;
+
+      // Obtener datos del producto
+      const producto = await obtenerPrecio(codigo);
+
+      nombreProd.textContent = producto.nombre;
+      precioProd.textContent = producto.precio;
+      estado.textContent = "✅ Producto encontrado";
+
+      // Mostrar botón para volver a escanear
+      btnEscanear.style.display = "block";
+    }
+
+    function reiniciarEscaner() {
+      tarjeta.style.display = "none";
+      btnEscanear.style.display = "none";
+      estado.textContent = "📷 Apuntá al código de barras";
+      buscando = false; // Habilitar nuevamente la detección
     }
 
     iniciarEscaner();
