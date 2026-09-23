@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Escáner de Precios</title>
-  <!-- Librería ZXing para escaneo universal -->
+  <!-- Librería ZXing para escaneo universal (iOS y Android) -->
   <script src="https://unpkg.com/@zxing/library@latest"></script>
   <style>
     body { font-family: sans-serif; text-align: center; padding: 15px; background: #f4f4f9; margin: 0; }
@@ -88,9 +88,9 @@
 
         codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
           if (result && !buscando) {
-            buscando = true; // Pausa para evitar repeticiones
+            buscando = true; // Pausa para evitar lecturas duplicadas
             
-            if (navigator.vibrate) navigator.vibrate(100); // Vibrar si se soporta
+            if (navigator.vibrate) navigator.vibrate(100); // Vibración de confirmación
 
             const codigo = result.getText();
             mostrarResultado(codigo);
@@ -105,10 +105,20 @@
     // 3. Buscar el código en el JSON y mostrar precio
     function mostrarResultado(codigo) {
       tarjeta.style.display = "block";
-      codigoLeido.textContent = "Código: " + codigo;
+      codigoLeido.textContent = "Código detectado: " + codigo;
 
-      // Buscar coincidencia exacta en el objeto
-      const producto = productosDB[codigo];
+      // Variación sin ceros a la izquierda por si el lector omite ceros iniciales
+      const codigoSinCeros = codigo.replace(/^0+/, '');
+
+      // Buscar coincidencia directa o con tolerancia a ceros y espacios
+      let producto = productosDB[codigo] || productosDB[codigoSinCeros];
+
+      if (!producto) {
+        const claveEncontrada = Object.keys(productosDB).find(key => 
+          key.trim() === codigo || key.trim() === codigoSinCeros
+        );
+        if (claveEncontrada) producto = productosDB[claveEncontrada];
+      }
 
       if (producto) {
         nombreProd.textContent = producto.nombre;
@@ -121,13 +131,13 @@
         precioProd.textContent = "Sin Registro";
         tarjeta.style.background = "#fff3cd";
         tarjeta.style.borderColor = "#ffeeba";
-        estado.textContent = "⚠️ El código no está en la lista";
+        estado.textContent = "⚠️ El código (" + codigo + ") no figura en productos.json";
       }
 
       btnEscanear.style.display = "block";
     }
 
-    // 4. Volver a escanear otro sin recargar la página
+    // 4. Volver a escanear sin recargar la página
     function reiniciarEscaner() {
       tarjeta.style.display = "none";
       btnEscanear.style.display = "none";
@@ -135,7 +145,7 @@
       buscando = false;
     }
 
-    // Arrancar el proceso
+    // Iniciar la aplicación
     cargarProductos();
   </script>
 </body>
