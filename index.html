@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Consulta de Precios</title>
-    <!-- Cargamos la librería para uso de cámara y lectura de códigos -->
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <!-- Librería ZXing para escaneo automático sin selectores -->
+    <script type="text/javascript" src="https://unpkg.com/@zxing/library@latest"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -27,12 +27,18 @@
             width: 100%;
             max-width: 450px;
         }
-        #reader {
+        .video-container {
+            position: relative;
             width: 100%;
             border-radius: 8px;
             overflow: hidden;
-            margin-bottom: 15px;
             background-color: #000;
+            margin-bottom: 15px;
+        }
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
         }
         input[type="text"] {
             width: 100%;
@@ -72,10 +78,12 @@
 <div class="container">
     <h2>Buscador de Precios</h2>
     
-    <!-- Visor de la cámara -->
-    <div id="reader"></div>
+    <!-- Contenedor del video directo de la cámara -->
+    <div class="video-container">
+        <video id="video"></video>
+    </div>
 
-    <!-- Entrada manual o por lector USB/Bluetooth -->
+    <!-- Entrada manual o por lectora USB -->
     <input type="text" id="codigoInput" placeholder="O ingrese código manualmente..." autocomplete="off">
 
     <div class="card" id="resultadoCard">
@@ -89,18 +97,18 @@
     const input = document.getElementById('codigoInput');
     const nombreEl = document.getElementById('nombreProducto');
     const precioEl = document.getElementById('precioProducto');
-    let html5QrcodeScanner;
+    const codeReader = new ZXing.BrowserMultiFormatReader();
 
-    // Cargar productos directamente desde el archivo JSON
+    // Cargar productos desde productos.json
     fetch('productos.json')
         .then(response => {
-            if (!response.ok) throw new Error('No se pudo cargar el archivo JSON');
+            if (!response.ok) throw new Error('No se pudo cargar productos.json');
             return response.json();
         })
         .then(data => {
             productos = data;
             nombreEl.textContent = "Listo para escanear";
-            iniciarCamara();
+            iniciarEscanerCamara();
         })
         .catch(error => {
             console.error('Error:', error);
@@ -108,7 +116,7 @@
             nombreEl.classList.add('error');
         });
 
-    // Función para buscar e integrar con la lógica de productos
+    // Función de búsqueda en la lista
     function buscarProducto(codigo) {
         if (productos.length === 0) {
             nombreEl.textContent = "Base de datos no cargada";
@@ -133,7 +141,7 @@
         }
     }
 
-    // Escucha de ingreso manual o por lectora
+    // Evento de ingreso manual
     input.addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
             const codigo = input.value.trim();
@@ -144,30 +152,26 @@
         }
     });
 
-    // Inicialización de la Cámara con la librería Html5Qrcode
-    function iniciarCamara() {
-        html5QrcodeScanner = new Html5QrcodeScanner(
-            "reader",
-            { 
-                fps: 10, 
-                qrbox: { width: 250, height: 150 },
-                experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true
+    // Inicialización automática de la cámara trasera
+    function iniciarEscanerCamara() {
+        const constraints = {
+            video: {
+                facingMode: { exact: "environment" } // Forzar cámara trasera sin menú
+            }
+        };
+
+        codeReader.decodeFromConstraints(constraints, 'video', (result, err) => {
+            if (result) {
+                buscarProducto(result.text);
+            }
+        }).catch(err => {
+            // Si el dispositivo no soporta 'exact: environment', iniciamos con la disponible
+            codeReader.decodeFromInputVideoDevice(undefined, 'video', (result, err) => {
+                if (result) {
+                    buscarProducto(result.text);
                 }
-            },
-            /* verbose= */ false
-        );
-
-        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
-    }
-
-    function onScanSuccess(decodedText, decodedResult) {
-        // Al detectar un código por cámara, realizamos la búsqueda
-        buscarProducto(decodedText);
-    }
-
-    function onScanFailure(error) {
-        // Manejo silencioso de falsos positivos en el análisis continuo
+            });
+        });
     }
 </script>
 
