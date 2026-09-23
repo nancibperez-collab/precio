@@ -3,118 +3,65 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Consulta de Precios</title>
-  <!-- Cargamos la librería para activar la cámara -->
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <title>Escáner Universal (iPhone / Android)</title>
+  <!-- Cargamos la librería ZXing para compatibilidad universal -->
+  <script src="https://unpkg.com/@zxing/library@latest"></script>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background-color: #f4f4f9; }
-    h1 { color: #333; }
-    .instrucciones { color: #666; font-size: 14px; }
-    .btn-escanear { background-color: #007bff; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; margin-bottom: 15px; font-weight: bold; }
-    .btn-escanear:active { background-color: #0056b3; }
-    .viewport { width: 100%; max-width: 400px; margin: 0 auto 20px auto; border: 2px dashed #ccc; border-radius: 8px; background: #fff; min-height: 250px; }
-    .resultado { background: white; padding: 15px; border-radius: 8px; max-width: 400px; margin: 0 auto; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-    .label-codigo { font-size: 12px; color: #888; }
-    .precio { font-size: 28px; font-weight: bold; color: #28a745; margin-top: 10px; }
+    body { font-family: sans-serif; text-align: center; padding: 20px; background: #f4f4f9; }
+    .container { max-width: 400px; margin: 0 auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    video { width: 100%; border-radius: 8px; background: #000; }
+    #resultado { margin-top: 15px; font-size: 1.2em; font-weight: bold; color: #2c3e50; word-break: break-all; }
+    .estado { font-size: 0.9em; color: #666; margin-bottom: 10px; }
   </style>
 </head>
 <body>
 
-  <h1>Consulta de Precios</h1>
-  <p class="instrucciones">Presiona el botón y enfoca el código de barras.</p>
-  
-  <button class="btn-escanear" id="btnIniciar" onclick="iniciarEscaner()">📷 Escanear Producto</button>
-
-  <!-- Contenedor del video -->
-  <div id="interactive" class="viewport"></div>
-
-  <div class="resultado" id="contenedorResultado">
-    <div class="label-codigo">Código detectado: <span id="codigoLeido">-</span></div>
-    <h2 id="nombreProducto">Esperando escaneo...</h2>
-    <div class="precio" id="precioProducto">-</div>
+  <div class="container">
+    <h2>Probador de Escáner (iOS / Android)</h2>
+    <p class="estado" id="estado">Iniciando cámara...</p>
+    <video id="video" autoplay playsinline muted></video>
+    <div id="resultado">Esperando código...</div>
   </div>
 
   <script>
-    let listaProductos = [];
-    let html5QrCode = null;
+    const video = document.getElementById('video');
+    const resultado = document.getElementById('resultado');
+    const estado = document.getElementById('estado');
 
-    // Cargar productos desde productos.json
-    fetch('productos.json')
-      .then(response => response.json())
-      .then(data => {
-        listaProductos = data;
-        console.log('Productos cargados:', listaProductos.length);
-      })
-      .catch(err => {
-        console.error('Error al cargar productos.json:', err);
-        document.getElementById('nombreProducto').textContent = 'Error al cargar archivo de precios';
-      });
+    async function iniciarEscaner() {
+      // Usamos el lector ZXing compatible con iOS y Android
+      const codeReader = new ZXing.BrowserMultiFormatReader();
 
-    function iniciarEscaner() {
-      document.getElementById('nombreProducto').textContent = 'Iniciando cámara...';
-      document.getElementById('precioProducto').textContent = '-';
+      try {
+        // Pedir las cámaras disponibles en el iPhone
+        const videoInputDevices = await codeReader.listVideoInputDevices();
+        
+        // Seleccionar la cámara trasera (environment)
+        let selectedDeviceId;
+        const trasera = videoInputDevices.find(device => 
+          device.label.toLowerCase().includes('back') || 
+          device.label.toLowerCase().includes('trasera') || 
+          device.label.toLowerCase().includes('environment')
+        );
 
-      if (html5QrCode && html5QrCode.isScanning) {
-        html5QrCode.stop().then(() => activarCamara()).catch(err => console.error(err));
-      } else {
-        activarCamara();
+        selectedDeviceId = trasera ? trasera.deviceId : videoInputDevices[0].deviceId;
+
+        estado.textContent = "📷 Apuntá al código de barras";
+
+        // Iniciar escaneo continuo
+        codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
+          if (result) {
+            resultado.textContent = "🎉 ¡Código leído!: " + result.getText();
+            resultado.style.color = "green";
+          }
+        });
+
+      } catch (error) {
+        estado.textContent = "❌ Error al acceder a la cámara: " + error.message;
       }
     }
 
-    function activarCamara() {
-      html5QrCode = new Html5Qrcode("interactive", {
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.CODE_128
-        ]
-      });
-
-      const configuracion = { 
-        fps: 15, // Velocidad equilibrada que no satura el procesador del móvil
-        qrbox: { width: 300, height: 150 },
-        aspectRatio: 1.0
-      };
-
-      html5QrCode.start(
-        { facingMode: "environment" }, 
-        configuracion, 
-        onScanSuccess
-      ).catch(err => {
-        alert("No se pudo abrir la cámara. Asegúrate de dar permisos en el navegador.");
-      });
-    }
-
-    function onScanSuccess(decodedText) {
-      html5QrCode.stop().then(() => {
-        buscarProducto(decodedText);
-      }).catch(err => console.error(err));
-    }
-
-    function buscarProducto(codigoEscaneado) {
-      const codigoLimpio = String(codigoEscaneado).trim();
-      document.getElementById('codigoLeido').textContent = codigoLimpio;
-
-      const encontrado = listaProductos.find(item => {
-        const codigoEnJson = String(
-          item["Código de barras"] || 
-          item["codigo_barras"] || 
-          item["Codigo de barras"] || ''
-        ).trim();
-
-        return codigoEnJson === codigoLimpio;
-      });
-
-      if (encontrado) {
-        document.getElementById('nombreProducto').textContent = encontrado["Producto"] || encontrado["producto"];
-        document.getElementById('precioProducto').textContent = `$${encontrado["Precio"] || encontrado["precio"]}`;
-      } else {
-        document.getElementById('nombreProducto').textContent = 'Artículo no encontrado';
-        document.getElementById('precioProducto').textContent = '-';
-      }
-    }
+    iniciarEscaner();
   </script>
 </body>
 </html>
